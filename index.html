@@ -12,7 +12,7 @@
             height: 100%;
             background-color: #000;
             overflow: hidden;
-            font-family: 'Courier New', sans-serif; /* デジタルっぽいフォントに変更 */
+            font-family: 'Courier New', sans-serif;
         }
 
         #remix-container {
@@ -37,7 +37,7 @@
             min-height: 100vh;
             min-width: 177.78vh; 
             opacity: 0;
-            transition: opacity 0.2s linear; 
+            transition: opacity 1s ease-in; 
             mix-blend-mode: screen; /* 初期値 */
         }
 
@@ -200,10 +200,10 @@
         // ループ開始
         setTimeout(() => {
             // 0.5秒ごとに透明度を変更
-            setInterval(autoMixLogic, 500);
+            setInterval(autoMixLogic, 1000);
             
             // 3秒ごとにジャンプチャンス
-            setInterval(randomJumpLogic, 3000);
+            setInterval(randomJumpLogic, 5000);
         }, 3000);
 
     </script>
