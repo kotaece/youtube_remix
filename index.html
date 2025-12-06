@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remix Player - Blend Modes</title>
+    <title>Remix Player - Glitch Edition</title>
     <style>
         body, html {
             margin: 0;
@@ -13,6 +13,20 @@
             background-color: #000;
             overflow: hidden;
             font-family: 'Courier New', sans-serif;
+        }
+
+        /* --- ノイズオーバーレイ（新機能） --- */
+        /* 画面全体にザラザラした質感を乗せる透明なレイヤー */
+        #noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 50; /* 映像より手前、ボタンより奥 */
+            opacity: 0.15; /* ノイズの濃さ */
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
         }
 
         #remix-container {
@@ -37,14 +51,38 @@
             min-height: 100vh;
             min-width: 177.78vh; 
             opacity: 0;
-            transition: opacity 1s ease-in-out; 
-            mix-blend-mode: screen; /* 初期値 */
+            mix-blend-mode: screen;
+            /* 【変更】グリッチ感を出すため、変化をカクカクさせる */
+            transition: all 0.05s steps(2);
+            /* フィルターの初期値 */
+            filter: none;
         }
 
         .video-layer iframe {
             width: 100%;
             height: 100%;
-            transform: scale(1.5); 
+            /* 基準スケール */
+            transform: scale(1.5);
+            transition: transform 0.05s steps(2);
+        }
+
+        /* --- グリッチ用CSSクラス（新機能） --- */
+        
+        /* パターンA: 強烈な色反転と彩度ブースト */
+        .glitch-invert {
+            filter: invert(1) saturate(3) contrast(2) !important;
+        }
+
+        /* パターンB: 歪み（iframeに適用する） */
+        /* 親のscale(1.5)にさらに歪みを加える設定 */
+        .video-layer.glitch-skew iframe {
+            transform: scale(1.6) skewX(20deg) translateX(30px) !important;
+        }
+
+        /* パターンC: 瞬間的なブラーと輝度アップ */
+        .glitch-blur {
+            filter: blur(10px) brightness(2.5) !important;
+            opacity: 1 !important; /* 強制的に表示 */
         }
 
         /* --- コントロールパネル --- */
@@ -59,7 +97,6 @@
             align-items: center;
         }
 
-        /* Blend Mode ボタン */
         #blend-btn {
             background: rgba(0, 0, 0, 0.5);
             color: #fff;
@@ -74,7 +111,7 @@
             backdrop-filter: blur(4px);
             transition: all 0.2s;
             text-transform: uppercase;
-            min-width: 240px; /* 文字が変わっても幅を固定気味にする */
+            min-width: 240px; 
             text-align: center;
         }
 
@@ -91,6 +128,8 @@
     </style>
 </head>
 <body>
+
+    <div id="noise-overlay"></div>
 
     <div id="remix-container">
         <div id="player1" class="video-layer"></div>
@@ -109,9 +148,11 @@
         let players = [];
         let playerStates = [false, false, false, false, false];
 
-        // ブレンドモードの設定リスト
         const blendModes = ['screen', 'overlay', 'difference', 'exclusion', 'normal'];
         let currentModeIndex = 0;
+
+        // グリッチの種類を定義
+        const glitchTypes = ['glitch-invert', 'glitch-skew', 'glitch-blur'];
 
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
@@ -147,34 +188,24 @@
             }
         }
 
-        // --- ブレンドモード切替機能 ---
-
         function toggleBlendMode() {
-            // 次のモードへインデックスを進める
             currentModeIndex = (currentModeIndex + 1) % blendModes.length;
             const newMode = blendModes[currentModeIndex];
-
-            // 全ての動画レイヤーに新しいモードを適用
             const layers = document.querySelectorAll('.video-layer');
             layers.forEach(layer => {
                 layer.style.mixBlendMode = newMode;
             });
-
-            // ボタンの文字を更新
             const btn = document.getElementById('blend-btn');
             btn.innerText = "BLEND: " + newMode;
         }
 
-        // --- オートミックス機能（常に動作） ---
-
+        // --- オートミックス機能 ---
         function autoMixLogic() {
             const layers = document.querySelectorAll('.video-layer');
             layers.forEach((layer, index) => {
                 if(playerStates[index]) {
-                    // 点滅ロジック
-                    const isFlash = Math.random() > 0.4; // 60%の確率で表示
+                    const isFlash = Math.random() > 0.4; 
                     if (isFlash) {
-                        // 少しランダムな不透明度
                         layer.style.opacity = (Math.random() * 0.6) + 0.2; 
                     } else {
                         layer.style.opacity = 0;
@@ -183,9 +214,9 @@
             });
         }
 
+        // --- ジャンプ機能 ---
         function randomJumpLogic() {
             players.forEach((player, index) => {
-                // 再生中ならジャンプを試みる
                 if (player && player.seekTo && playerStates[index]) {
                     if (Math.random() < 0.3) { 
                         const duration = player.getDuration();
@@ -197,13 +228,47 @@
             });
         }
 
+        // --- グリッチトリガー機能（新機能） ---
+        function triggerGlitch() {
+            // 1. 再生中のレイヤーのインデックスを探す
+            const activeIndexes = [];
+            playerStates.forEach((state, index) => {
+                if (state) activeIndexes.push(index);
+            });
+
+            // 再生中のものがなければ何もしない
+            if (activeIndexes.length === 0) return;
+
+            // 2. 確率で発動（例: 30%の確率でグリッチ発生）
+            if (Math.random() > 0.3) return;
+
+            // 3. ターゲットとグリッチの種類をランダムに決定
+            const targetIndex = activeIndexes[Math.floor(Math.random() * activeIndexes.length)];
+            const targetLayer = document.getElementById('player' + (targetIndex + 1));
+            const glitchType = glitchTypes[Math.floor(Math.random() * glitchTypes.length)];
+
+            // 4. グリッチ用クラスを付与
+            targetLayer.classList.add(glitchType);
+
+            // 5. ほんの一瞬後にクラスを削除（50ms〜200msの間）
+            const duration = Math.random() * 150 + 50;
+            setTimeout(() => {
+                targetLayer.classList.remove(glitchType);
+            }, duration);
+        }
+
+
         // ループ開始
         setTimeout(() => {
-            // 0.5秒ごとに透明度を変更
-            setInterval(autoMixLogic, 1000);
+            // 透明度変更（少し早めに）
+            setInterval(autoMixLogic, 400);
             
-            // 3秒ごとにジャンプチャンス
-            setInterval(randomJumpLogic, 5000);
+            // ジャンプ
+            setInterval(randomJumpLogic, 3000);
+
+            // グリッチチェック（頻繁にチェックする）
+            setInterval(triggerGlitch, 200);
+
         }, 3000);
 
     </script>
