@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Random Seek Remix Player</title>
+    <title>Remix Player - Dual Mode</title>
     <style>
         body, html {
             margin: 0;
@@ -12,8 +12,10 @@
             height: 100%;
             background-color: #000;
             overflow: hidden;
+            font-family: sans-serif;
         }
 
+        /* 映像コンテナ（操作不可） */
         #remix-container {
             position: relative;
             width: 100vw;
@@ -23,6 +25,7 @@
             align-items: center;
             pointer-events: none; 
             user-select: none;
+            z-index: 1;
         }
 
         .video-layer {
@@ -35,15 +38,102 @@
             min-height: 100vh;
             min-width: 177.78vh; 
             opacity: 0;
-            transition: opacity 0.1s linear;
+            /* マニュアル操作の追従性を良くするため、少し短めのtransitionにする */
+            transition: opacity 0.2s linear; 
             mix-blend-mode: screen; 
         }
 
         .video-layer iframe {
             width: 100%;
             height: 100%;
-            transform: scale(1.5); /* 広告・UI隠し用の拡大 */
+            transform: scale(1.5); 
         }
+
+        /* --- コントロールパネル（ここから新機能） --- */
+        #control-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100; /* 映像より手前に */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 30px;
+            border-radius: 30px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* モード切替ボタン */
+        #mode-btn {
+            background: transparent;
+            color: #fff;
+            border: 2px solid #fff;
+            padding: 8px 24px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            letter-spacing: 2px;
+            border-radius: 20px;
+            transition: all 0.3s;
+        }
+        #mode-btn:hover {
+            background: #fff;
+            color: #000;
+        }
+        #mode-btn.active {
+            background: #00ff9d; /* Autoモード時の色 */
+            border-color: #00ff9d;
+            color: #000;
+            box-shadow: 0 0 15px #00ff9d;
+        }
+
+        /* スライダーエリア */
+        #sliders-container {
+            display: flex; /* 横並び */
+            gap: 20px;
+            opacity: 0.3; /* Autoモード時は薄くする */
+            pointer-events: none; /* Autoモード時は触れない */
+            transition: opacity 0.3s;
+        }
+        /* Manualモード時のスタイル */
+        #sliders-container.manual-active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* スライダーの見た目 */
+        .fader-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .fader-group label {
+            color: #fff;
+            font-size: 10px;
+            margin-bottom: 5px;
+        }
+        input[type=range] {
+            -webkit-appearance: none; /* デフォルトの見た目を消す */
+            width: 100px; /* スライダーの幅 */
+            height: 4px;
+            background: #444;
+            border-radius: 2px;
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+
     </style>
 </head>
 <body>
@@ -55,10 +145,38 @@
         <div id="player4" class="video-layer"></div>
     </div>
 
+    <div id="control-panel">
+        <button id="mode-btn" onclick="toggleMode()">MODE: AUTO</button>
+        
+        <div id="sliders-container">
+            <div class="fader-group">
+                <label>1</label>
+                <input type="range" id="range1" min="0" max="1" step="0.01" value="0" oninput="manualMix(0, this.value)">
+            </div>
+            <div class="fader-group">
+                <label>2</label>
+                <input type="range" id="range2" min="0" max="1" step="0.01" value="0" oninput="manualMix(1, this.value)">
+            </div>
+            <div class="fader-group">
+                <label>3</label>
+                <input type="range" id="range3" min="0" max="1" step="0.01" value="0" oninput="manualMix(2, this.value)">
+            </div>
+            <div class="fader-group">
+                <label>4</label>
+                <input type="range" id="range4" min="0" max="1" step="0.01" value="0" oninput="manualMix(3, this.value)">
+            </div>
+        </div>
+    </div>
+
     <script>
         const videoIds = ['aI04_iIGYzs', 'U1tZNUgUZlo', 'tOqDliP-47A', '6kEA8FMht2o'];
         let players = [];
-        let playerStates = [false, false, false, false]; // 再生中フラグ
+        let playerStates = [false, false, false, false];
+
+        // モード管理用
+        let isAutoMode = true; 
+        let autoMixTimer = null;
+        let randomJumpTimer = null;
 
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
@@ -94,48 +212,118 @@
             }
         }
 
-        // 激しい点滅用の透明度変更関数
-        function glitchOpacity() {
-            const layers = document.querySelectorAll('.video-layer');
-            
-            layers.forEach((layer, index) => {
-                // 再生中のみ処理
-                if(playerStates[index]) {
-                    
-                    // 【激しさのポイント1】
-                    // 0.0〜0.8の滑らかな数値ではなく、
-                    // 「表示(0.8)」か「非表示(0)」かの2択にする確率を混ぜる
-                    // Math.random() > 0.5 で50%の確率でオン・オフ
-                    const isFlash = Math.random() > 0.5;
-                    
-                    if (isFlash) {
-                        // オンにする時もランダム性を持たせる
-                        layer.style.opacity = Math.random() * 0.9;
-                    } else {
-                        // オフ（完全に透明）
-                        layer.style.opacity = 0;
-                    }
+        // --- モード切替機能 ---
 
-                } else {
-                    layer.style.opacity = 0;
+        function toggleMode() {
+            isAutoMode = !isAutoMode;
+            const btn = document.getElementById('mode-btn');
+            const sliderContainer = document.getElementById('sliders-container');
+
+            if (isAutoMode) {
+                // Autoモードへ切り替え
+                btn.innerText = "MODE: AUTO";
+                btn.classList.add("active");
+                sliderContainer.classList.remove("manual-active");
+                
+                // オートミックス再開
+                startAutoMix();
+            } else {
+                // Manualモードへ切り替え
+                btn.innerText = "MODE: MANUAL";
+                btn.classList.remove("active");
+                sliderContainer.classList.add("manual-active");
+                
+                // オートミックス停止
+                stopAutoMix();
+                
+                // スライダーの位置を現在の透明度に合わせる（同期）
+                syncSliders();
+            }
+        }
+
+        // --- マニュアル操作 ---
+
+        function manualMix(index, value) {
+            // Manualモードの時だけ有効
+            if (!isAutoMode) {
+                const layers = document.querySelectorAll('.video-layer');
+                if (layers[index]) {
+                    layers[index].style.opacity = value;
+                }
+            }
+        }
+
+        // スライダーの位置を現在の画面の明るさに合わせる関数
+        function syncSliders() {
+            const layers = document.querySelectorAll('.video-layer');
+            layers.forEach((layer, index) => {
+                const currentOpacity = window.getComputedStyle(layer).opacity;
+                const slider = document.getElementById('range' + (index + 1));
+                if (slider) {
+                    slider.value = currentOpacity;
                 }
             });
         }
 
-        function chaoticLoop() {
-        // 透明度変更を実行
-        glitchOpacity();
+        // --- オート機能 ---
 
-        // 次の変更までの時間をランダムに決める
-        // 50ms(超高速) 〜 800ms(少しゆったり) の間で毎回変わる
-        const nextTime = Math.random() * 750 + 50; 
+        function autoMixLogic() {
+            if (!isAutoMode) return; // マニュアル時は何もしない
 
-        // 決まった時間後にまた自分自身を呼ぶ
-        setTimeout(chaoticLoop, nextTime);
-    }
+            const layers = document.querySelectorAll('.video-layer');
+            layers.forEach((layer, index) => {
+                if(playerStates[index]) {
+                    // 少し激しめのランダム（0か、0.4〜1.0）
+                    const isFlash = Math.random() > 0.4; // 60%の確率で表示
+                    if (isFlash) {
+                        layer.style.opacity = (Math.random() * 0.6) + 0.2; 
+                    } else {
+                        layer.style.opacity = 0;
+                    }
+                }
+            });
+        }
 
-    // 実行開始（setIntervalの代わりにこれを呼ぶ）
-    setTimeout(chaoticLoop, 3000);
+        function randomJumpLogic() {
+            // ジャンプはAuto/Manual両方で有効にしておくか、
+            // 完全手動がいいなら `if(!isAutoMode) return;` を追加してください。
+            // 今回は「ミックスは手動だけど、ジャンプは勝手にしてくれる」設定にします。
+            
+            players.forEach((player, index) => {
+                if (player && player.seekTo && playerStates[index]) {
+                    if (Math.random() < 0.3) { 
+                        const duration = player.getDuration();
+                        if (duration > 0) {
+                            player.seekTo(Math.random() * duration, true);
+                        }
+                    }
+                }
+            });
+        }
+
+        function startAutoMix() {
+            // 既に動いていたら重複しないようにクリア
+            stopAutoMix();
+            
+            // 0.2秒ごとに透明度変更
+            autoMixTimer = setInterval(autoMixLogic, 200);
+        }
+
+        function stopAutoMix() {
+            if (autoMixTimer) clearInterval(autoMixTimer);
+        }
+
+        // 初期化処理
+        setTimeout(() => {
+            // 初期状態はAutoモード
+            const btn = document.getElementById('mode-btn');
+            btn.classList.add("active");
+            
+            startAutoMix();
+            
+            // ジャンプ機能はずっと動かしておく（5秒ごと）
+            randomJumpTimer = setInterval(randomJumpLogic, 5000);
+        }, 3000);
 
     </script>
 </body>
