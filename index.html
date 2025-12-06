@@ -2,169 +2,131 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>YouTube Overlay Remix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Layer Remix Player</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #000; color: #fff; margin: 0; padding: 20px; }
-        
-        /* 映像を重ねるためのコンテナ */
-        .screen-container {
-            position: relative;
+        body, html {
+            margin: 0;
+            padding: 0;
             width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            /* 16:9 の比率を維持するテクニック */
-            padding-bottom: 56.25%; 
-            height: 0;
+            height: 100%;
+            background-color: #000; /* 背景は黒 */
             overflow: hidden;
-            border: 2px solid #444;
-            background: #000;
         }
 
-        /* プレーヤーを強制的に同じ場所に配置 */
-        .player-layer {
+        #remix-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 個々のプレイヤーの共通スタイル */
+        .video-layer {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* 上の動画がクリックを邪魔しないようにする */
+            pointer-events: none; /* 動画をクリックできないようにして背景扱いにする */
+            opacity: 0; /* 初期状態は透明 */
+            transition: opacity 3s ease-in-out; /* 3秒かけてゆっくり透明度が変わる */
+            mix-blend-mode: screen; /* 動画を重ねた時に明るく合成する（お好みで normal に変更可） */
         }
-
-        /* 下のレイヤー（ベース） */
-        #player1-box {
-            z-index: 1;
-        }
-
-        /* 上のレイヤー（ブレンド用） */
-        #player2-box {
-            z-index: 2;
-            opacity: 0.5; /* 初期透明度 */
-            /* 映像編集ソフトのような合成モード（ブラウザによって動作が異なる場合があります） */
-            mix-blend-mode: screen; 
-        }
-
-        /* YouTubeのiframe自体のスタイル */
-        iframe { width: 100%; height: 100%; }
-
-        .controls { margin-top: 30px; padding: 20px; background: #222; border-radius: 8px; display: inline-block; }
-        input[type="text"] { width: 120px; background: #333; color: white; border: 1px solid #555; padding: 5px; }
-        button { padding: 10px 20px; background: #ff0033; color: white; border: none; cursor: pointer; font-size: 16px; margin: 5px; }
-        button:hover { background: #cc0000; }
         
-        /* スライダーのスタイル */
-        .slider-container { margin: 15px 0; }
-        input[type="range"] { width: 300px; cursor: pointer; }
+        /* iframe自体をフルサイズにする */
+        .video-layer iframe {
+            width: 100%;
+            height: 100%;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Overlay Remix Player</h1>
-
-    <div class="screen-container">
-        <div id="player1-box" class="player-layer">
-            <div id="player1"></div>
-        </div>
-        <div id="player2-box" class="player-layer">
-            <div id="player2"></div>
-        </div>
-    </div>
-
-    <div class="controls">
-        <div class="slider-container">
-            <label>動画2の透明度 (MIX): <span id="opacity-val">50%</span></label><br>
-            <input type="range" id="opacitySlider" min="0" max="1" step="0.01" value="0.5" oninput="changeOpacity(this.value)">
-        </div>
-
-        <div>
-            <label>ID 1: <input type="text" id="vid1" value="jfKfPfyJRdk"></label>
-            <label>ID 2: <input type="text" id="vid2" value="5qap5aO4i9A"></label>
-            <label>間隔: <input type="number" id="interval" value="5" style="width:40px">秒</label>
-        </div>
-        <br>
-        <button onclick="startRemix()">▶ PLAY REMIX</button>
-        <button onclick="stopRemix()" style="background:#555;">■ STOP</button>
-        <p id="status-text" style="color:#aaa; font-size:12px;">準備完了</p>
+    <div id="remix-container">
+        <div id="player1" class="video-layer"></div>
+        <div id="player2" class="video-layer"></div>
+        <div id="player3" class="video-layer"></div>
+        <div id="player4" class="video-layer"></div>
     </div>
 
     <script>
+        // 動画IDのリスト
+        const videoIds = [
+            'aI04_iIGYzs',
+            'U1tZNUgUZlo',
+            'tOqDliP-47A',
+            '6kEA8FMht2o'
+        ];
+
+        // プレイヤーオブジェクトを格納する配列
+        let players = [];
+
+        // YouTube IFrame APIの読み込み
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        var player1, player2;
-        var remixTimer = null;
-
+        // APIの準備ができたら呼ばれる関数
         function onYouTubeIframeAPIReady() {
-            var defaultId1 = document.getElementById('vid1').value;
-            var defaultId2 = document.getElementById('vid2').value;
+            videoIds.forEach((id, index) => {
+                const playerId = 'player' + (index + 1);
+                
+                players[index] = new YT.Player(playerId, {
+                    videoId: id,
+                    playerVars: {
+                        'autoplay': 1,      // 自動再生
+                        'controls': 0,      // コントロール非表示
+                        'mute': 1,          // ミュート（自動再生に必須）
+                        'loop': 1,          // ループ再生
+                        'playlist': id,     // ループさせるためにプレイリストに同じIDを指定
+                        'playsinline': 1,   // インライン再生
+                        'rel': 0            // 関連動画を表示しない
+                    },
+                    events: {
+                        'onReady': onPlayerReady
+                    }
+                });
+            });
+        }
 
-            var playerConfig = {
-                width: '100%',
-                height: '100%',
-                playerVars: { 
-                    'controls': 0, // 映像だけ見せるためにYouTubeのコントローラーを隠す
-                    'showinfo': 0,
-                    'rel': 0,
-                    'modestbranding': 1,
-                    'mute': 1,
-                    // 重要：ローカルサーバー以外で動かす場合のエラー対策
-                    'origin': window.location.origin 
+        // プレイヤーの準備ができたら動画を再生＆ミュート確実化
+        function onPlayerReady(event) {
+            event.target.mute();
+            event.target.playVideo();
+        }
+
+        // ランダムな透明度を設定する関数
+        function shuffleOpacity() {
+            // 各動画IDに対応するdiv要素を取得
+            const layer1 = document.getElementById('player1');
+            const layer2 = document.getElementById('player2');
+            const layer3 = document.getElementById('player3');
+            const layer4 = document.getElementById('player4');
+            
+            const layers = [layer1, layer2, layer3, layer4];
+
+            layers.forEach(layer => {
+                if(layer) {
+                    // 0.0 (透明) 〜 0.8 (やや不透明) の間でランダム生成
+                    // ※完全に1.0にすると下の動画が見えなくなることがあるため調整
+                    const randomOpacity = Math.random() * 0.8;
+                    layer.style.opacity = randomOpacity;
                 }
-            };
-
-            // Player 1 (背面)
-            player1 = new YT.Player('player1', Object.assign({}, playerConfig, { videoId: defaultId1 }));
-            
-            // Player 2 (前面)
-            player2 = new YT.Player('player2', Object.assign({}, playerConfig, { videoId: defaultId2 }));
+            });
         }
 
-        function changeOpacity(val) {
-            document.getElementById('player2-box').style.opacity = val;
-            document.getElementById('opacity-val').innerText = Math.round(val * 100) + "%";
-        }
+        // 初回実行
+        // API読み込み時間を考慮して少し遅らせて開始
+        setTimeout(() => {
+            shuffleOpacity();
+            // 3秒ごとに透明度を変更（CSSのtransition時間と合わせるとスムーズ）
+            setInterval(shuffleOpacity, 3000); 
+        }, 2000);
 
-        function jumpToRandom(player) {
-            var duration = player.getDuration();
-            if (!duration) return;
-            var randomTime = Math.floor(Math.random() * (duration * 0.95));
-            player.seekTo(randomTime, true);
-        }
-
-        function startRemix() {
-            var v1 = document.getElementById('vid1').value;
-            var v2 = document.getElementById('vid2').value;
-            var intervalSec = document.getElementById('interval').value;
-
-            player1.loadVideoById(v1);
-            player2.loadVideoById(v2);
-            
-            player1.unMute(); 
-            // 2つの音が混ざるとうるさい場合があるので、片方を少し下げるなどの調整もJSで可能
-            // player2.setVolume(70); 
-            player2.unMute();
-
-            document.getElementById('status-text').innerText = "再生中 (MIX MODE)";
-
-            // 初回ジャンプ
-            jumpToRandom(player1);
-            jumpToRandom(player2);
-
-            if (remixTimer) clearInterval(remixTimer);
-            remixTimer = setInterval(function() {
-                // 両方同時にジャンプすると読み込み負荷が高いので、ランダムにどちらか、あるいは両方を飛ばす
-                if(Math.random() > 0.5) jumpToRandom(player1);
-                if(Math.random() > 0.5) jumpToRandom(player2);
-            }, intervalSec * 1000);
-        }
-
-        function stopRemix() {
-            if (remixTimer) clearInterval(remixTimer);
-            player1.pauseVideo();
-            player2.pauseVideo();
-            document.getElementById('status-text').innerText = "停止";
-        }
     </script>
 </body>
 </html>
