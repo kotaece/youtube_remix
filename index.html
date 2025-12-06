@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remix Player - Dual Mode</title>
+    <title>Remix Player - 5 Layers</title>
     <style>
         body, html {
             margin: 0;
@@ -49,7 +49,7 @@
             transform: scale(1.5); 
         }
 
-        /* --- コントロールパネル（ここから新機能） --- */
+        /* --- コントロールパネル --- */
         #control-panel {
             position: absolute;
             bottom: 20px;
@@ -65,6 +65,8 @@
             border-radius: 30px;
             backdrop-filter: blur(5px);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            /* スマホなどでスライダーがはみ出ないように最大幅を設定 */
+            max-width: 90vw; 
         }
 
         /* モード切替ボタン */
@@ -94,10 +96,13 @@
         /* スライダーエリア */
         #sliders-container {
             display: flex; /* 横並び */
-            gap: 20px;
+            gap: 15px;
             opacity: 0.3; /* Autoモード時は薄くする */
             pointer-events: none; /* Autoモード時は触れない */
             transition: opacity 0.3s;
+            /* 画面が狭い時に折り返す設定（5本だと横に長くなるため） */
+            flex-wrap: wrap; 
+            justify-content: center;
         }
         /* Manualモード時のスタイル */
         #sliders-container.manual-active {
@@ -110,6 +115,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-width: 60px; /* タップしやすい幅を確保 */
         }
         .fader-group label {
             color: #fff;
@@ -118,7 +124,7 @@
         }
         input[type=range] {
             -webkit-appearance: none; /* デフォルトの見た目を消す */
-            width: 100px; /* スライダーの幅 */
+            width: 80px; /* 5本入るように少し幅を狭めました */
             height: 4px;
             background: #444;
             border-radius: 2px;
@@ -174,8 +180,11 @@
     </div>
 
     <script>
+        // 5つの動画ID
         const videoIds = ['eyDWLwDRCqc','aI04_iIGYzs', 'U1tZNUgUZlo', 'tOqDliP-47A', '6kEA8FMht2o'];
+        
         let players = [];
+        // 5つの状態管理フラグ
         let playerStates = [false, false, false, false, false];
 
         // モード管理用
@@ -195,141 +204,3 @@
                     videoId: id,
                     playerVars: {
                         'autoplay': 1, 'controls': 0, 'showinfo': 0, 'modestbranding': 1,
-                        'mute': 1, 'loop': 1, 'playlist': id, 'playsinline': 1,
-                        'rel': 0, 'disablekb': 1, 'iv_load_policy': 3
-                    },
-                    events: {
-                        'onReady': onPlayerReady,
-                        'onStateChange': (event) => onPlayerStateChange(event, index)
-                    }
-                });
-            });
-        }
-
-        function onPlayerReady(event) {
-            event.target.mute();
-            event.target.playVideo();
-        }
-
-        function onPlayerStateChange(event, index) {
-            if (event.data === YT.PlayerState.PLAYING) {
-                setTimeout(() => { playerStates[index] = true; }, 1000);
-            }
-        }
-
-        // --- モード切替機能 ---
-
-        function toggleMode() {
-            isAutoMode = !isAutoMode;
-            const btn = document.getElementById('mode-btn');
-            const sliderContainer = document.getElementById('sliders-container');
-
-            if (isAutoMode) {
-                // Autoモードへ切り替え
-                btn.innerText = "MODE: AUTO";
-                btn.classList.add("active");
-                sliderContainer.classList.remove("manual-active");
-                
-                // オートミックス再開
-                startAutoMix();
-            } else {
-                // Manualモードへ切り替え
-                btn.innerText = "MODE: MANUAL";
-                btn.classList.remove("active");
-                sliderContainer.classList.add("manual-active");
-                
-                // オートミックス停止
-                stopAutoMix();
-                
-                // スライダーの位置を現在の透明度に合わせる（同期）
-                syncSliders();
-            }
-        }
-
-        // --- マニュアル操作 ---
-
-        function manualMix(index, value) {
-            // Manualモードの時だけ有効
-            if (!isAutoMode) {
-                const layers = document.querySelectorAll('.video-layer');
-                if (layers[index]) {
-                    layers[index].style.opacity = value;
-                }
-            }
-        }
-
-        // スライダーの位置を現在の画面の明るさに合わせる関数
-        function syncSliders() {
-            const layers = document.querySelectorAll('.video-layer');
-            layers.forEach((layer, index) => {
-                const currentOpacity = window.getComputedStyle(layer).opacity;
-                const slider = document.getElementById('range' + (index + 1));
-                if (slider) {
-                    slider.value = currentOpacity;
-                }
-            });
-        }
-
-        // --- オート機能 ---
-
-        function autoMixLogic() {
-            if (!isAutoMode) return; // マニュアル時は何もしない
-
-            const layers = document.querySelectorAll('.video-layer');
-            layers.forEach((layer, index) => {
-                if(playerStates[index]) {
-                    // 少し激しめのランダム（0か、0.4〜1.0）
-                    const isFlash = Math.random() > 0.4; // 60%の確率で表示
-                    if (isFlash) {
-                        layer.style.opacity = (Math.random() * 0.6) + 0.2; 
-                    } else {
-                        layer.style.opacity = 0;
-                    }
-                }
-            });
-        }
-
-        function randomJumpLogic() {
-            // ジャンプはAuto/Manual両方で有効にしておくか、
-            // 完全手動がいいなら `if(!isAutoMode) return;` を追加してください。
-            // 今回は「ミックスは手動だけど、ジャンプは勝手にしてくれる」設定にします。
-            
-            players.forEach((player, index) => {
-                if (player && player.seekTo && playerStates[index]) {
-                    if (Math.random() < 0.3) { 
-                        const duration = player.getDuration();
-                        if (duration > 0) {
-                            player.seekTo(Math.random() * duration, true);
-                        }
-                    }
-                }
-            });
-        }
-
-        function startAutoMix() {
-            // 既に動いていたら重複しないようにクリア
-            stopAutoMix();
-            
-            // 0.2秒ごとに透明度変更
-            autoMixTimer = setInterval(autoMixLogic, 200);
-        }
-
-        function stopAutoMix() {
-            if (autoMixTimer) clearInterval(autoMixTimer);
-        }
-
-        // 初期化処理
-        setTimeout(() => {
-            // 初期状態はAutoモード
-            const btn = document.getElementById('mode-btn');
-            btn.classList.add("active");
-            
-            startAutoMix();
-            
-            // ジャンプ機能はずっと動かしておく（3秒ごと）
-            randomJumpTimer = setInterval(randomJumpLogic, 3000);
-        }, 3000);
-
-    </script>
-</body>
-</html>
