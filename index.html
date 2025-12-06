@@ -143,6 +143,7 @@
         <div id="player2" class="video-layer"></div>
         <div id="player3" class="video-layer"></div>
         <div id="player4" class="video-layer"></div>
+        <div id="player5" class="video-layer"></div>
     </div>
 
     <div id="control-panel">
@@ -165,13 +166,17 @@
                 <label>4</label>
                 <input type="range" id="range4" min="0" max="1" step="0.01" value="0" oninput="manualMix(3, this.value)">
             </div>
+             <div class="fader-group">
+                <label>5</label>
+                <input type="range" id="range5" min="0" max="1" step="0.01" value="0" oninput="manualMix(4, this.value)">
+            </div>
         </div>
     </div>
 
     <script>
-        const videoIds = ['aI04_iIGYzs', 'U1tZNUgUZlo', 'tOqDliP-47A', '6kEA8FMht2o'];
+        const videoIds = ['eyDWLwDRCqc','aI04_iIGYzs', 'U1tZNUgUZlo', 'tOqDliP-47A', '6kEA8FMht2o'];
         let players = [];
-        let playerStates = [false, false, false, false];
+        let playerStates = [false, false, false, false, false];
 
         // モード管理用
         let isAutoMode = true; 
