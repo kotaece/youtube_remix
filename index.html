@@ -204,3 +204,137 @@
                     videoId: id,
                     playerVars: {
                         'autoplay': 1, 'controls': 0, 'showinfo': 0, 'modestbranding': 1,
+                        'mute': 1, 'loop': 1, 'playlist': id, 'playsinline': 1,
+                        'rel': 0, 'disablekb': 1, 'iv_load_policy': 3
+                    },
+                    events: {
+                        'onReady': onPlayerReady,
+                        'onStateChange': (event) => onPlayerStateChange(event, index)
+                    }
+                });
+            });
+        }
+
+        function onPlayerReady(event) {
+            event.target.mute();
+            event.target.playVideo();
+        }
+
+        function onPlayerStateChange(event, index) {
+            if (event.data === YT.PlayerState.PLAYING) {
+                setTimeout(() => { playerStates[index] = true; }, 1000);
+            }
+        }
+
+        // --- モード切替機能 ---
+
+        function toggleMode() {
+            isAutoMode = !isAutoMode;
+            const btn = document.getElementById('mode-btn');
+            const sliderContainer = document.getElementById('sliders-container');
+
+            if (isAutoMode) {
+                // Autoモードへ切り替え
+                btn.innerText = "MODE: AUTO";
+                btn.classList.add("active");
+                sliderContainer.classList.remove("manual-active");
+                
+                // オートミックス再開
+                startAutoMix();
+            } else {
+                // Manualモードへ切り替え
+                btn.innerText = "MODE: MANUAL";
+                btn.classList.remove("active");
+                sliderContainer.classList.add("manual-active");
+                
+                // オートミックス停止
+                stopAutoMix();
+                
+                // スライダーの位置を現在の透明度に合わせる（同期）
+                syncSliders();
+            }
+        }
+
+        // --- マニュアル操作 ---
+
+        function manualMix(index, value) {
+            // Manualモードの時だけ有効
+            if (!isAutoMode) {
+                const layers = document.querySelectorAll('.video-layer');
+                if (layers[index]) {
+                    layers[index].style.opacity = value;
+                }
+            }
+        }
+
+        // スライダーの位置を現在の画面の明るさに合わせる関数
+        function syncSliders() {
+            const layers = document.querySelectorAll('.video-layer');
+            layers.forEach((layer, index) => {
+                const currentOpacity = window.getComputedStyle(layer).opacity;
+                const slider = document.getElementById('range' + (index + 1));
+                if (slider) {
+                    slider.value = currentOpacity;
+                }
+            });
+        }
+
+        // --- オート機能 ---
+
+        function autoMixLogic() {
+            if (!isAutoMode) return; // マニュアル時は何もしない
+
+            const layers = document.querySelectorAll('.video-layer');
+            layers.forEach((layer, index) => {
+                if(playerStates[index]) {
+                    // 少し激しめのランダム（0か、0.4〜1.0）
+                    const isFlash = Math.random() > 0.4; // 60%の確率で表示
+                    if (isFlash) {
+                        layer.style.opacity = (Math.random() * 0.6) + 0.2; 
+                    } else {
+                        layer.style.opacity = 0;
+                    }
+                }
+            });
+        }
+
+        function randomJumpLogic() {
+            players.forEach((player, index) => {
+                if (player && player.seekTo && playerStates[index]) {
+                    if (Math.random() < 0.3) { 
+                        const duration = player.getDuration();
+                        if (duration > 0) {
+                            player.seekTo(Math.random() * duration, true);
+                        }
+                    }
+                }
+            });
+        }
+
+        function startAutoMix() {
+            // 既に動いていたら重複しないようにクリア
+            stopAutoMix();
+            
+            // 0.5秒ごとに透明度変更（ご指定の値）
+            autoMixTimer = setInterval(autoMixLogic, 500);
+        }
+
+        function stopAutoMix() {
+            if (autoMixTimer) clearInterval(autoMixTimer);
+        }
+
+        // 初期化処理
+        setTimeout(() => {
+            // 初期状態はAutoモード
+            const btn = document.getElementById('mode-btn');
+            btn.classList.add("active");
+            
+            startAutoMix();
+            
+            // ジャンプ機能はずっと動かしておく（3秒ごと：ご指定の値）
+            randomJumpTimer = setInterval(randomJumpLogic, 3000);
+        }, 3000);
+
+    </script>
+</body>
+</html>
