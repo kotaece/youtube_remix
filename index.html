@@ -35,7 +35,7 @@
             min-height: 100vh;
             min-width: 177.78vh; 
             opacity: 0;
-            transition: opacity 3s ease-in-out; /* 透明度の変化はゆっくり */
+            transition: opacity 0.1s linear;
             mix-blend-mode: screen; 
         }
 
@@ -122,19 +122,20 @@
             });
         }
 
-        setTimeout(() => {
-            // 初回実行
-            glitchOpacity();
-            
-            // 【激しさのポイント2】
-            // 3000(3秒) ではなく 100(0.1秒) ごとに切り替える
-            // 数値を小さくするほど高速になります（例: 50, 100, 200）
-            setInterval(glitchOpacity, 100); 
-            
-            // 再生位置ジャンプも頻繁にするならここも短く
-            setInterval(randomJump, 2000); // 2秒ごとにジャンプチャンス
+        function chaoticLoop() {
+        // 透明度変更を実行
+        glitchOpacity();
 
-        }, 3000);
+        // 次の変更までの時間をランダムに決める
+        // 50ms(超高速) 〜 800ms(少しゆったり) の間で毎回変わる
+        const nextTime = Math.random() * 750 + 50; 
+
+        // 決まった時間後にまた自分自身を呼ぶ
+        setTimeout(chaoticLoop, nextTime);
+    }
+
+    // 実行開始（setIntervalの代わりにこれを呼ぶ）
+    setTimeout(chaoticLoop, 3000);
 
     </script>
 </body>
