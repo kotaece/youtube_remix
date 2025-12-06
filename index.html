@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remix Player - 5 Layers</title>
+    <title>Remix Player - Blend Modes</title>
     <style>
         body, html {
             margin: 0;
@@ -12,10 +12,9 @@
             height: 100%;
             background-color: #000;
             overflow: hidden;
-            font-family: sans-serif;
+            font-family: 'Courier New', sans-serif; /* デジタルっぽいフォントに変更 */
         }
 
-        /* 映像コンテナ（操作不可） */
         #remix-container {
             position: relative;
             width: 100vw;
@@ -38,9 +37,8 @@
             min-height: 100vh;
             min-width: 177.78vh; 
             opacity: 0;
-            /* マニュアル操作の追従性を良くするため、少し短めのtransitionにする */
             transition: opacity 0.2s linear; 
-            mix-blend-mode: difference; 
+            mix-blend-mode: screen; /* 初期値 */
         }
 
         .video-layer iframe {
@@ -52,92 +50,42 @@
         /* --- コントロールパネル --- */
         #control-panel {
             position: absolute;
-            bottom: 20px;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 100; /* 映像より手前に */
+            z-index: 100;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
             align-items: center;
-            gap: 15px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 15px 30px;
-            border-radius: 30px;
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            /* スマホなどでスライダーがはみ出ないように最大幅を設定 */
-            max-width: 90vw; 
         }
 
-        /* モード切替ボタン */
-        #mode-btn {
-            background: transparent;
+        /* Blend Mode ボタン */
+        #blend-btn {
+            background: rgba(0, 0, 0, 0.5);
             color: #fff;
-            border: 2px solid #fff;
-            padding: 8px 24px;
-            font-size: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 12px 30px;
+            font-size: 16px;
+            font-family: inherit;
             font-weight: bold;
             cursor: pointer;
             letter-spacing: 2px;
-            border-radius: 20px;
-            transition: all 0.3s;
-        }
-        #mode-btn:hover {
-            background: #fff;
-            color: #000;
-        }
-        #mode-btn.active {
-            background: #00ff9d; /* Autoモード時の色 */
-            border-color: #00ff9d;
-            color: #000;
-            box-shadow: 0 0 15px #00ff9d;
+            border-radius: 50px;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s;
+            text-transform: uppercase;
+            min-width: 240px; /* 文字が変わっても幅を固定気味にする */
+            text-align: center;
         }
 
-        /* スライダーエリア */
-        #sliders-container {
-            display: flex; /* 横並び */
-            gap: 15px;
-            opacity: 0.3; /* Autoモード時は薄くする */
-            pointer-events: none; /* Autoモード時は触れない */
-            transition: opacity 0.3s;
-            /* 画面が狭い時に折り返す設定（5本だと横に長くなるため） */
-            flex-wrap: wrap; 
-            justify-content: center;
-        }
-        /* Manualモード時のスタイル */
-        #sliders-container.manual-active {
-            opacity: 1;
-            pointer-events: auto;
+        #blend-btn:hover {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
         }
 
-        /* スライダーの見た目 */
-        .fader-group {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-width: 60px; /* タップしやすい幅を確保 */
-        }
-        .fader-group label {
-            color: #fff;
-            font-size: 10px;
-            margin-bottom: 5px;
-        }
-        input[type=range] {
-            -webkit-appearance: none; /* デフォルトの見た目を消す */
-            width: 80px; /* 5本入るように少し幅を狭めました */
-            height: 4px;
-            background: #444;
-            border-radius: 2px;
-            outline: none;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #fff;
-            border-radius: 50%;
-            cursor: pointer;
-            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        #blend-btn:active {
+            transform: scale(0.95);
         }
 
     </style>
@@ -153,44 +101,17 @@
     </div>
 
     <div id="control-panel">
-        <button id="mode-btn" onclick="toggleMode()">MODE: AUTO</button>
-        
-        <div id="sliders-container">
-            <div class="fader-group">
-                <label>1</label>
-                <input type="range" id="range1" min="0" max="1" step="0.01" value="0" oninput="manualMix(0, this.value)">
-            </div>
-            <div class="fader-group">
-                <label>2</label>
-                <input type="range" id="range2" min="0" max="1" step="0.01" value="0" oninput="manualMix(1, this.value)">
-            </div>
-            <div class="fader-group">
-                <label>3</label>
-                <input type="range" id="range3" min="0" max="1" step="0.01" value="0" oninput="manualMix(2, this.value)">
-            </div>
-            <div class="fader-group">
-                <label>4</label>
-                <input type="range" id="range4" min="0" max="1" step="0.01" value="0" oninput="manualMix(3, this.value)">
-            </div>
-             <div class="fader-group">
-                <label>5</label>
-                <input type="range" id="range5" min="0" max="1" step="0.01" value="0" oninput="manualMix(4, this.value)">
-            </div>
-        </div>
+        <button id="blend-btn" onclick="toggleBlendMode()">BLEND: SCREEN</button>
     </div>
 
     <script>
-        // 5つの動画ID
         const videoIds = ['eyDWLwDRCqc','aI04_iIGYzs', 'U1tZNUgUZlo', 'tOqDliP-47A', '6kEA8FMht2o'];
-        
         let players = [];
-        // 5つの状態管理フラグ
         let playerStates = [false, false, false, false, false];
 
-        // モード管理用
-        let isAutoMode = true; 
-        let autoMixTimer = null;
-        let randomJumpTimer = null;
+        // ブレンドモードの設定リスト
+        const blendModes = ['screen', 'overlay', 'difference', 'exclusion', 'normal'];
+        let currentModeIndex = 0;
 
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
@@ -226,70 +147,34 @@
             }
         }
 
-        // --- モード切替機能 ---
+        // --- ブレンドモード切替機能 ---
 
-        function toggleMode() {
-            isAutoMode = !isAutoMode;
-            const btn = document.getElementById('mode-btn');
-            const sliderContainer = document.getElementById('sliders-container');
+        function toggleBlendMode() {
+            // 次のモードへインデックスを進める
+            currentModeIndex = (currentModeIndex + 1) % blendModes.length;
+            const newMode = blendModes[currentModeIndex];
 
-            if (isAutoMode) {
-                // Autoモードへ切り替え
-                btn.innerText = "MODE: AUTO";
-                btn.classList.add("active");
-                sliderContainer.classList.remove("manual-active");
-                
-                // オートミックス再開
-                startAutoMix();
-            } else {
-                // Manualモードへ切り替え
-                btn.innerText = "MODE: MANUAL";
-                btn.classList.remove("active");
-                sliderContainer.classList.add("manual-active");
-                
-                // オートミックス停止
-                stopAutoMix();
-                
-                // スライダーの位置を現在の透明度に合わせる（同期）
-                syncSliders();
-            }
-        }
-
-        // --- マニュアル操作 ---
-
-        function manualMix(index, value) {
-            // Manualモードの時だけ有効
-            if (!isAutoMode) {
-                const layers = document.querySelectorAll('.video-layer');
-                if (layers[index]) {
-                    layers[index].style.opacity = value;
-                }
-            }
-        }
-
-        // スライダーの位置を現在の画面の明るさに合わせる関数
-        function syncSliders() {
+            // 全ての動画レイヤーに新しいモードを適用
             const layers = document.querySelectorAll('.video-layer');
-            layers.forEach((layer, index) => {
-                const currentOpacity = window.getComputedStyle(layer).opacity;
-                const slider = document.getElementById('range' + (index + 1));
-                if (slider) {
-                    slider.value = currentOpacity;
-                }
+            layers.forEach(layer => {
+                layer.style.mixBlendMode = newMode;
             });
+
+            // ボタンの文字を更新
+            const btn = document.getElementById('blend-btn');
+            btn.innerText = "BLEND: " + newMode;
         }
 
-        // --- オート機能 ---
+        // --- オートミックス機能（常に動作） ---
 
         function autoMixLogic() {
-            if (!isAutoMode) return; // マニュアル時は何もしない
-
             const layers = document.querySelectorAll('.video-layer');
             layers.forEach((layer, index) => {
                 if(playerStates[index]) {
-                    // 少し激しめのランダム（0か、0.4〜1.0）
+                    // 点滅ロジック
                     const isFlash = Math.random() > 0.4; // 60%の確率で表示
                     if (isFlash) {
+                        // 少しランダムな不透明度
                         layer.style.opacity = (Math.random() * 0.6) + 0.2; 
                     } else {
                         layer.style.opacity = 0;
@@ -300,6 +185,7 @@
 
         function randomJumpLogic() {
             players.forEach((player, index) => {
+                // 再生中ならジャンプを試みる
                 if (player && player.seekTo && playerStates[index]) {
                     if (Math.random() < 0.3) { 
                         const duration = player.getDuration();
@@ -311,28 +197,13 @@
             });
         }
 
-        function startAutoMix() {
-            // 既に動いていたら重複しないようにクリア
-            stopAutoMix();
-            
-            // 0.5秒ごとに透明度変更（ご指定の値）
-            autoMixTimer = setInterval(autoMixLogic, 500);
-        }
-
-        function stopAutoMix() {
-            if (autoMixTimer) clearInterval(autoMixTimer);
-        }
-
-        // 初期化処理
+        // ループ開始
         setTimeout(() => {
-            // 初期状態はAutoモード
-            const btn = document.getElementById('mode-btn');
-            btn.classList.add("active");
+            // 0.5秒ごとに透明度を変更
+            setInterval(autoMixLogic, 500);
             
-            startAutoMix();
-            
-            // ジャンプ機能はずっと動かしておく（3秒ごと：ご指定の値）
-            randomJumpTimer = setInterval(randomJumpLogic, 3000);
+            // 3秒ごとにジャンプチャンス
+            setInterval(randomJumpLogic, 3000);
         }, 3000);
 
     </script>
