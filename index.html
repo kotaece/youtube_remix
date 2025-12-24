@@ -3,133 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remix Player - Glitch Edition</title>
+    <title>Sheet Sync Remix Player</title>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            overflow: hidden;
-            font-family: 'Courier New', sans-serif;
-        }
-
-        /* --- ノイズオーバーレイ（新機能） --- */
-        /* 画面全体にザラザラした質感を乗せる透明なレイヤー */
-        #noise-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            pointer-events: none;
-            z-index: 50; /* 映像より手前、ボタンより奥 */
-            opacity: 0.15; /* ノイズの濃さ */
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-        }
-
-        #remix-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            pointer-events: none; 
-            user-select: none;
-            z-index: 1;
-        }
-
-        .video-layer {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 100vw;
-            height: 56.25vw; 
-            min-height: 100vh;
-            min-width: 177.78vh; 
-            opacity: 0;
-            mix-blend-mode: screen;
-            /* 【変更】グリッチ感を出すため、変化をカクカクさせる */
-            transition: all 0.05s steps(2);
-            /* フィルターの初期値 */
-            filter: none;
-        }
-
-        .video-layer iframe {
-            width: 100%;
-            height: 100%;
-            /* 基準スケール */
-            transform: scale(1.5);
-            transition: transform 0.05s steps(2);
-        }
-
-        /* --- グリッチ用CSSクラス（新機能） --- */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; font-family: 'Courier New', sans-serif; }
         
-        /* パターンA: 強烈な色反転と彩度ブースト */
-        .glitch-invert {
-            filter: invert(1) saturate(3) contrast(2) !important;
-        }
+        /* Loading Overlay */
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: flex; justify-content: center; align-items: center; color: #0f0; flex-direction: column; gap: 20px; transition: opacity 0.5s; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #0f0; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* パターンB: 歪み（iframeに適用する） */
-        /* 親のscale(1.5)にさらに歪みを加える設定 */
-        .video-layer.glitch-skew iframe {
-            transform: scale(1.6) skewX(20deg) translateX(30px) !important;
-        }
+        /* Effects */
+        #noise-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 50; opacity: 0.15; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); }
+        #remix-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; pointer-events: none; user-select: none; z-index: 1; }
+        .video-layer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.78vh; opacity: 0; mix-blend-mode: screen; transition: all 0.05s steps(2); filter: none; }
+        .video-layer iframe { width: 100%; height: 100%; transform: scale(1.5); transition: transform 0.05s steps(2); }
 
-        /* パターンC: 瞬間的なブラーと輝度アップ */
-        .glitch-blur {
-            filter: blur(10px) brightness(2.5) !important;
-            opacity: 1 !important; /* 強制的に表示 */
-        }
+        /* Glitch Classes */
+        .glitch-invert { filter: invert(1) saturate(3) contrast(2) !important; }
+        .video-layer.glitch-skew iframe { transform: scale(1.6) skewX(20deg) translateX(30px) !important; }
+        .glitch-blur { filter: blur(10px) brightness(2.5) !important; opacity: 1 !important; }
 
-        /* --- コントロールパネル --- */
-        #control-panel {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        #blend-btn {
-            background: rgba(0, 0, 0, 0.5);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            padding: 12px 30px;
-            font-size: 16px;
-            font-family: inherit;
-            font-weight: bold;
-            cursor: pointer;
-            letter-spacing: 2px;
-            border-radius: 50px;
-            backdrop-filter: blur(4px);
-            transition: all 0.2s;
-            text-transform: uppercase;
-            min-width: 240px; 
-            text-align: center;
-        }
-
-        #blend-btn:hover {
-            background: #fff;
-            color: #000;
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
-        }
-
-        #blend-btn:active {
-            transform: scale(0.95);
-        }
-
+        /* UI */
+        #control-panel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 10px; }
+        .btn { background: rgba(0, 0, 0, 0.5); color: #fff; border: 1px solid rgba(255, 255, 255, 0.5); padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 50px; backdrop-filter: blur(4px); text-transform: uppercase; font-family: inherit; }
+        .btn:hover { background: #fff; color: #000; }
+        #log-display { position: absolute; top: 20px; left: 20px; color: #0f0; font-size: 12px; z-index: 60; text-shadow: 0 0 5px #000; pointer-events: none; white-space: pre-wrap; }
     </style>
 </head>
 <body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">Loading List from Google Sheets...</div>
+    </div>
 
     <div id="noise-overlay"></div>
+    <div id="log-display">Connecting...</div>
 
     <div id="remix-container">
         <div id="player1" class="video-layer"></div>
@@ -140,28 +48,84 @@
     </div>
 
     <div id="control-panel">
-        <button id="blend-btn" onclick="toggleBlendMode()">BLEND: SCREEN</button>
+        <button class="btn" onclick="toggleBlendMode()" id="blend-btn">BLEND: SCREEN</button>
+        <button class="btn" onclick="swapRandomVideo()">SWAP VIDEO</button>
     </div>
 
     <script>
-        const videoIds = ['eyDWLwDRCqc','aI04_iIGYzs', 'U1tZNUgUZlo', 'tOqDliP-47A', '6kEA8FMht2o'];
+        // ==========================================
+        // 【重要】ここにスプレッドシートの「公開URL (CSV形式)」を貼る
+        // ==========================================
+        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQxxxxxx/pub?gid=0&single=true&output=csv'; 
+        // ↑これはダミーです。必ず自分のURLに書き換えてください
+        // ==========================================
+
+        let videoPool = []; // スプレッドシートから読み込んだIDがここに入る
         let players = [];
         let playerStates = [false, false, false, false, false];
+        let currentVideoIds = ['', '', '', '', '']; 
 
         const blendModes = ['screen', 'overlay', 'difference', 'exclusion', 'normal'];
         let currentModeIndex = 0;
-
-        // グリッチの種類を定義
         const glitchTypes = ['glitch-invert', 'glitch-skew', 'glitch-blur'];
 
-        var tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        var firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        function log(msg) {
+            const el = document.getElementById('log-display');
+            el.innerText = msg + "\n" + el.innerText;
+            if(el.innerText.length > 500) el.innerText = el.innerText.substring(0, 500);
+        }
+
+        // --- スプレッドシート読み込み機能 ---
+        async function initApp() {
+            try {
+                // 1. CSVデータを取得
+                const response = await fetch(SHEET_CSV_URL);
+                if (!response.ok) throw new Error("Network response was not ok");
+                const text = await response.text();
+
+                // 2. URLから動画IDを抽出
+                const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/gi;
+                let match;
+                while ((match = regex.exec(text)) !== null) {
+                    videoPool.push(match[1]); // IDのみ配列に追加
+                }
+                
+                // 重複削除
+                videoPool = [...new Set(videoPool)];
+
+                if (videoPool.length < 5) {
+                    throw new Error("動画が少なすぎます。最低5つ以上登録してください。");
+                }
+
+                log(`Loaded ${videoPool.length} videos from Sheet.`);
+                document.getElementById('loading').style.opacity = 0;
+                setTimeout(() => document.getElementById('loading').remove(), 500);
+
+                // 3. YouTube APIを読み込んで開始
+                var tag = document.createElement('script');
+                tag.src = "https://www.youtube.com/iframe_api";
+                var firstScriptTag = document.getElementsByTagName('script')[0];
+                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+            } catch (error) {
+                document.getElementById('loading-text').innerText = "Error: " + error.message;
+                log("Error loading sheet: " + error.message);
+            }
+        }
+
+        // ページ読み込み時に実行
+        initApp();
+
+
+        // --- 以下、前回までのプレイヤーロジック ---
 
         function onYouTubeIframeAPIReady() {
-            videoIds.forEach((id, index) => {
+            const initialIds = getRandomSelection(5);
+            
+            initialIds.forEach((id, index) => {
                 const playerId = 'player' + (index + 1);
+                currentVideoIds[index] = id; 
+
                 players[index] = new YT.Player(playerId, {
                     videoId: id,
                     playerVars: {
@@ -188,87 +152,83 @@
             }
         }
 
+        function getRandomSelection(count) {
+            const shuffled = [...videoPool].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, count);
+        }
+
+        function getRandomVideoFromPool() {
+            const available = videoPool.filter(id => !currentVideoIds.includes(id));
+            if (available.length === 0) return videoPool[Math.floor(Math.random() * videoPool.length)];
+            return available[Math.floor(Math.random() * available.length)];
+        }
+
+        function swapRandomVideo() {
+            const targetIndex = Math.floor(Math.random() * players.length);
+            const player = players[targetIndex];
+            const layer = document.getElementById('player' + (targetIndex + 1));
+            const newId = getRandomVideoFromPool();
+
+            if (player && player.loadVideoById) {
+                log(`Swapping Player ${targetIndex+1} -> ${newId}`);
+                playerStates[targetIndex] = false;
+                layer.style.opacity = 0;
+                setTimeout(() => {
+                    player.loadVideoById({ videoId: newId, startSeconds: 0 });
+                    player.mute();
+                    player.playVideo();
+                    currentVideoIds[targetIndex] = newId;
+                }, 1000);
+            }
+        }
+
         function toggleBlendMode() {
             currentModeIndex = (currentModeIndex + 1) % blendModes.length;
             const newMode = blendModes[currentModeIndex];
-            const layers = document.querySelectorAll('.video-layer');
-            layers.forEach(layer => {
-                layer.style.mixBlendMode = newMode;
-            });
-            const btn = document.getElementById('blend-btn');
-            btn.innerText = "BLEND: " + newMode;
+            document.querySelectorAll('.video-layer').forEach(l => l.style.mixBlendMode = newMode);
+            document.getElementById('blend-btn').innerText = "BLEND: " + newMode;
         }
 
-        // --- オートミックス機能 ---
         function autoMixLogic() {
             const layers = document.querySelectorAll('.video-layer');
             layers.forEach((layer, index) => {
                 if(playerStates[index]) {
                     const isFlash = Math.random() > 0.4; 
-                    if (isFlash) {
-                        layer.style.opacity = (Math.random() * 0.6) + 0.2; 
-                    } else {
-                        layer.style.opacity = 0;
-                    }
+                    layer.style.opacity = isFlash ? (Math.random() * 0.6) + 0.2 : 0;
+                } else {
+                    layer.style.opacity = 0;
                 }
             });
         }
 
-        // --- ジャンプ機能 ---
         function randomJumpLogic() {
             players.forEach((player, index) => {
-                if (player && player.seekTo && playerStates[index]) {
-                    if (Math.random() < 0.3) { 
-                        const duration = player.getDuration();
-                        if (duration > 0) {
-                            player.seekTo(Math.random() * duration, true);
-                        }
-                    }
+                if (player && player.seekTo && playerStates[index] && Math.random() < 0.3) { 
+                    const duration = player.getDuration();
+                    if (duration > 0) player.seekTo(Math.random() * duration, true);
                 }
             });
         }
 
-        // --- グリッチトリガー機能（新機能） ---
         function triggerGlitch() {
-            // 1. 再生中のレイヤーのインデックスを探す
             const activeIndexes = [];
-            playerStates.forEach((state, index) => {
-                if (state) activeIndexes.push(index);
-            });
+            playerStates.forEach((state, i) => { if (state) activeIndexes.push(i); });
+            if (activeIndexes.length === 0 || Math.random() > 0.3) return;
 
-            // 再生中のものがなければ何もしない
-            if (activeIndexes.length === 0) return;
-
-            // 2. 確率で発動（例: 30%の確率でグリッチ発生）
-            if (Math.random() > 0.3) return;
-
-            // 3. ターゲットとグリッチの種類をランダムに決定
             const targetIndex = activeIndexes[Math.floor(Math.random() * activeIndexes.length)];
             const targetLayer = document.getElementById('player' + (targetIndex + 1));
             const glitchType = glitchTypes[Math.floor(Math.random() * glitchTypes.length)];
 
-            // 4. グリッチ用クラスを付与
             targetLayer.classList.add(glitchType);
-
-            // 5. ほんの一瞬後にクラスを削除（50ms〜200msの間）
-            const duration = Math.random() * 150 + 50;
-            setTimeout(() => {
-                targetLayer.classList.remove(glitchType);
-            }, duration);
+            setTimeout(() => targetLayer.classList.remove(glitchType), Math.random() * 150 + 50);
         }
-
 
         // ループ開始
         setTimeout(() => {
-            // 透明度変更（少し早めに）
             setInterval(autoMixLogic, 400);
-            
-            // ジャンプ
             setInterval(randomJumpLogic, 3000);
-
-            // グリッチチェック（頻繁にチェックする）
             setInterval(triggerGlitch, 200);
-
+            setInterval(swapRandomVideo, 20000); 
         }, 3000);
 
     </script>
