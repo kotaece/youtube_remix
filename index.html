@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sheet Sync Remix Player</title>
+    <title>Sheet Sync Remix Player (No-Ad Optimized)</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; font-family: 'Courier New', sans-serif; }
         
@@ -54,11 +54,11 @@
 
     <script>
         // ==========================================
-        // 【重要】ここにスプレッドシートの「公開URL (CSV形式)」を貼る
+        // 設定エリア
         // ==========================================
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQrbH26HD8I8KHFIKj1wIN0GDJV4YWi4XQIfQfBkSicS4p5EPKtRxfAoOlCrtZsOWeYLG3cDI9PwdwI/pub?gid=0&single=true&output=csv'; 
 
-        let videoPool = []; // スプレッドシートから読み込んだIDがここに入る
+        let videoPool = []; 
         let players = [];
         let playerStates = [false, false, false, false, false];
         let currentVideoIds = ['', '', '', '', '']; 
@@ -73,33 +73,28 @@
             if(el.innerText.length > 500) el.innerText = el.innerText.substring(0, 500);
         }
 
-        // --- スプレッドシート読み込み機能 ---
         async function initApp() {
             try {
-                // 1. CSVデータを取得
                 const response = await fetch(SHEET_CSV_URL);
                 if (!response.ok) throw new Error("Network response was not ok");
                 const text = await response.text();
 
-                // 2. URLから動画IDを抽出
                 const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/gi;
                 let match;
                 while ((match = regex.exec(text)) !== null) {
-                    videoPool.push(match[1]); // IDのみ配列に追加
+                    videoPool.push(match[1]);
                 }
                 
-                // 重複削除
                 videoPool = [...new Set(videoPool)];
 
                 if (videoPool.length < 5) {
                     throw new Error("動画が少なすぎます。最低5つ以上登録してください。");
                 }
 
-                log(`Loaded ${videoPool.length} videos from Sheet.`);
+                log(`Loaded ${videoPool.length} videos.`);
                 document.getElementById('loading').style.opacity = 0;
                 setTimeout(() => document.getElementById('loading').remove(), 500);
 
-                // 3. YouTube APIを読み込んで開始
                 var tag = document.createElement('script');
                 tag.src = "https://www.youtube.com/iframe_api";
                 var firstScriptTag = document.getElementsByTagName('script')[0];
@@ -107,15 +102,11 @@
 
             } catch (error) {
                 document.getElementById('loading-text').innerText = "Error: " + error.message;
-                log("Error loading sheet: " + error.message);
+                log("Error: " + error.message);
             }
         }
 
-        // ページ読み込み時に実行
         initApp();
-
-
-        // --- 以下、前回までのプレイヤーロジック ---
 
         function onYouTubeIframeAPIReady() {
             const initialIds = getRandomSelection(5);
@@ -127,9 +118,18 @@
                 players[index] = new YT.Player(playerId, {
                     videoId: id,
                     playerVars: {
-                        'autoplay': 1, 'controls': 0, 'showinfo': 0, 'modestbranding': 1,
-                        'mute': 1, 'loop': 1, 'playlist': id, 'playsinline': 1,
-                        'rel': 0, 'disablekb': 1, 'iv_load_policy': 3
+                        'autoplay': 1, 
+                        'controls': 0, 
+                        'showinfo': 0, 
+                        'modestbranding': 1,
+                        'mute': 1,      // 確実にミュート
+                        'loop': 1, 
+                        'playlist': id, 
+                        'playsinline': 1,
+                        'rel': 0, 
+                        'disablekb': 1, 
+                        'iv_load_policy': 3,
+                        'origin': window.location.origin // APIの安定性向上
                     },
                     events: {
                         'onReady': onPlayerReady,
@@ -140,13 +140,16 @@
         }
 
         function onPlayerReady(event) {
-            event.target.mute();
+            event.target.mute(); // 再度念押しでミュート
             event.target.playVideo();
         }
 
         function onPlayerStateChange(event, index) {
             if (event.data === YT.PlayerState.PLAYING) {
                 setTimeout(() => { playerStates[index] = true; }, 1000);
+            } else {
+                // 再生中以外はステートを落とす（バッファリング中などに映るのを防ぐ）
+                playerStates[index] = false;
             }
         }
 
@@ -171,10 +174,18 @@
                 log(`Swapping Player ${targetIndex+1} -> ${newId}`);
                 playerStates[targetIndex] = false;
                 layer.style.opacity = 0;
+
+                // 【ここがポイント】
+                // 0秒から開始せず、0〜30秒の間からランダムにスタートさせる。
+                // これにより「動画の冒頭」判定を回避し、プレロール広告が出にくくなる。
+                const randomStart = Math.floor(Math.random() * 30); 
+
                 setTimeout(() => {
-                    player.loadVideoById({ videoId: newId, startSeconds: 0 });
-                    player.mute();
-                    player.playVideo();
+                    player.loadVideoById({ 
+                        videoId: newId, 
+                        startSeconds: randomStart 
+                    });
+                    player.mute(); // 確実にミュート
                     currentVideoIds[targetIndex] = newId;
                 }, 1000);
             }
@@ -191,8 +202,9 @@
             const layers = document.querySelectorAll('.video-layer');
             layers.forEach((layer, index) => {
                 if(playerStates[index]) {
+                    // よりアグレッシブに点滅させる
                     const isFlash = Math.random() > 0.4; 
-                    layer.style.opacity = isFlash ? (Math.random() * 0.6) + 0.2 : 0;
+                    layer.style.opacity = isFlash ? (Math.random() * 0.7) + 0.1 : 0;
                 } else {
                     layer.style.opacity = 0;
                 }
@@ -201,9 +213,14 @@
 
         function randomJumpLogic() {
             players.forEach((player, index) => {
-                if (player && player.seekTo && playerStates[index] && Math.random() < 0.3) { 
+                // シーク頻度を上げることで「ザッピング」感を高める
+                if (player && player.seekTo && playerStates[index] && Math.random() < 0.2) { 
                     const duration = player.getDuration();
-                    if (duration > 0) player.seekTo(Math.random() * duration, true);
+                    // 動画の長さが取得できている場合のみジャンプ
+                    if (duration > 0) {
+                         // 末尾に行き過ぎないように duration - 5秒 までの範囲でジャンプ
+                        player.seekTo(Math.random() * (duration - 5), true);
+                    }
                 }
             });
         }
@@ -221,12 +238,11 @@
             setTimeout(() => targetLayer.classList.remove(glitchType), Math.random() * 150 + 50);
         }
 
-        // ループ開始
         setTimeout(() => {
-            setInterval(autoMixLogic, 400);
-            setInterval(randomJumpLogic, 3000);
+            setInterval(autoMixLogic, 300); // 頻度を少し上げた
+            setInterval(randomJumpLogic, 4000);
             setInterval(triggerGlitch, 200);
-            setInterval(swapRandomVideo, 20000); 
+            setInterval(swapRandomVideo, 15000); 
         }, 3000);
 
     </script>
