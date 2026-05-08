@@ -116,7 +116,13 @@
                 var firstScriptTag = document.getElementsByTagName('script')[0];
                 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
             } catch (error) {
-                document.getElementById('loading-text').innerText = "Error: " + error.message;
+                // スピナーを隠してエラーを赤文字で目立たせる
+                document.querySelector('.spinner').style.display = 'none';
+                const errorText = document.getElementById('loading-text');
+                errorText.innerText = "読み込みエラーが発生しました。\n\n詳細: " + error.message + "\n\n【確認事項】\n1. SHEET_CSV_URL が正しいか\n2. スプレッドシートが「CSV形式」でウェブに公開されているか";
+                errorText.style.color = "#ff4444";
+                errorText.style.textAlign = "center";
+                errorText.style.lineHeight = "1.8";
             }
         }
 
