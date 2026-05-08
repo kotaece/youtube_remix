@@ -3,32 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Random YouTube Player</title>
+    <title>Crossfade Ambient Player</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; font-family: 'Courier New', sans-serif; }
         
-        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: flex; justify-content: center; align-items: center; color: #0f0; flex-direction: column; gap: 20px; transition: opacity 0.5s; }
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 999; display: flex; justify-content: center; align-items: center; color: #0f0; flex-direction: column; gap: 20px; transition: opacity 0.5s; padding: 20px; text-align: center; line-height: 1.6;}
         .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #0f0; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         #remix-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; pointer-events: none; user-select: none; z-index: 1; }
-        
-        /* 3秒かけてゆっくりクロスフェードする設定 */
         .video-layer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100vw; height: 56.25vw; min-height: 100vh; min-width: 177.78vh; opacity: 0; mix-blend-mode: screen; transition: opacity 3s ease-in-out; filter: none; }
         .video-layer iframe { width: 100%; height: 100%; transform: scale(1.5); }
 
-        /* UI コントロールパネルの見た目調整 */
-        #control-panel { 
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 100; 
-            display: flex; align-items: center; gap: 20px;
-            background: rgba(0, 0, 0, 0.6); padding: 15px 30px; border-radius: 50px; 
-            backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
+        #control-panel { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; align-items: center; gap: 20px; background: rgba(0, 0, 0, 0.6); padding: 15px 30px; border-radius: 50px; backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.2); }
         .btn { background: rgba(0, 0, 0, 0.5); color: #fff; border: 1px solid rgba(255, 255, 255, 0.5); padding: 10px 20px; font-weight: bold; cursor: pointer; border-radius: 50px; text-transform: uppercase; font-family: inherit; transition: all 0.3s; }
         .btn:hover { background: #fff; color: #000; }
-        
-        /* 新機能：ごちゃ混ぜ度スライダーのスタイル */
         .slider-group { display: flex; flex-direction: column; align-items: center; color: #fff; font-size: 12px; font-weight: bold; }
         input[type=range] { -webkit-appearance: none; width: 120px; height: 4px; background: #444; border-radius: 2px; outline: none; margin-top: 8px; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: #0f0; border-radius: 50%; cursor: pointer; box-shadow: 0 0 5px #000; }
@@ -38,7 +27,7 @@
 </head>
 <body>
     <div id="loading">
-        <div class="spinner"></div>
+        <div class="spinner" id="spinner"></div>
         <div id="loading-text">Loading List from Google Sheets...</div>
     </div>
 
@@ -63,19 +52,18 @@
 
     <script>
         // ==========================================
-        // スプレッドシートのURL
+        // ↓ここにご自身のCSV URLを貼り付けてください
+        // 注意：URLの前後にある ' （シングルクォーテーション）は絶対に消さないでください！
         // ==========================================
         const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQrbH26HD8I8KHFIKj1wIN0GDJV4YWi4XQIfQfBkSicS4p5EPKtRxfAoOlCrtZsOWeYLG3cDI9PwdwI/pub?gid=0&single=true&output=csv'; 
+        // ==========================================
 
         let videoPool = []; 
         let players = [];
         let playerStates = [false, false, false, false, false];
         let currentVideoIds = ['', '', '', '', '']; 
-
         const blendModes = ['screen', 'overlay', 'difference', 'exclusion', 'normal'];
         let currentModeIndex = 0;
-        
-        // 新機能：ごちゃ混ぜ度合い（同時に表示する動画の数）
         let mixLevel = 2; 
 
         function log(msg) {
@@ -84,19 +72,20 @@
             if(el.innerText.length > 300) el.innerText = el.innerText.substring(0, 300);
         }
 
-        // スライダーを動かした時に呼ばれる処理
         function updateMixLevel(val) {
             mixLevel = parseInt(val);
             document.getElementById('mix-level-label').innerText = "MIX LEVEL: " + mixLevel;
-            autoMixLogic(); // 変更をすぐに反映させる
+            autoMixLogic(); 
         }
 
         async function initApp() {
             try {
+                // 通信開始
                 const response = await fetch(SHEET_CSV_URL);
-                if (!response.ok) throw new Error("Network response was not ok");
+                if (!response.ok) throw new Error("Network response was not ok (" + response.status + ")");
                 const text = await response.text();
 
+                // URL抽出
                 const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/gi;
                 let match;
                 while ((match = regex.exec(text)) !== null) {
@@ -105,7 +94,9 @@
                 
                 videoPool = [...new Set(videoPool)];
 
-                if (videoPool.length < 5) throw new Error("動画が少なすぎます。最低5つ以上登録してください。");
+                if (videoPool.length < 5) {
+                    throw new Error(`動画が少なすぎます（現在: ${videoPool.length}件）。最低5つ以上登録してください。`);
+                }
 
                 log(`Loaded ${videoPool.length} videos.`);
                 document.getElementById('loading').style.opacity = 0;
@@ -115,14 +106,24 @@
                 tag.src = "https://www.youtube.com/iframe_api";
                 var firstScriptTag = document.getElementsByTagName('script')[0];
                 firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                
             } catch (error) {
-                // スピナーを隠してエラーを赤文字で目立たせる
-                document.querySelector('.spinner').style.display = 'none';
+                // ★エラーが起きたら画面に赤文字で表示する処理★
+                document.getElementById('spinner').style.display = 'none';
                 const errorText = document.getElementById('loading-text');
-                errorText.innerText = "読み込みエラーが発生しました。\n\n詳細: " + error.message + "\n\n【確認事項】\n1. SHEET_CSV_URL が正しいか\n2. スプレッドシートが「CSV形式」でウェブに公開されているか";
                 errorText.style.color = "#ff4444";
-                errorText.style.textAlign = "center";
-                errorText.style.lineHeight = "1.8";
+                errorText.style.fontSize = "18px";
+                errorText.innerHTML = `
+                    <b>⚠️ エラーが発生しました</b><br><br>
+                    ${error.message}<br><br>
+                    <div style="text-align:left; font-size:14px; color:#fff;">
+                    【よくある原因】<br>
+                    1. CSVのURLが間違っている、または変更されていない。<br>
+                    2. URLを囲む ' （シングルクォーテーション）を消してしまった。<br>
+                    3. スプレッドシートにYouTubeのURLが5件以上入っていない。<br>
+                    4. ブラウザがセキュリティ上の理由で通信をブロックした。
+                    </div>
+                `;
             }
         }
 
@@ -130,38 +131,22 @@
 
         function onYouTubeIframeAPIReady() {
             const initialIds = getRandomSelection(5);
-            
             initialIds.forEach((id, index) => {
                 const playerId = 'player' + (index + 1);
                 currentVideoIds[index] = id; 
-
                 players[index] = new YT.Player(playerId, {
                     videoId: id,
-                    playerVars: {
-                        'autoplay': 1, 'controls': 0, 'showinfo': 0, 'modestbranding': 1,
-                        'mute': 1, 'loop': 1, 'playlist': id, 'playsinline': 1,
-                        'rel': 0, 'disablekb': 1, 'iv_load_policy': 3,
-                        'origin': window.location.origin
-                    },
-                    events: {
-                        'onReady': onPlayerReady,
-                        'onStateChange': (event) => onPlayerStateChange(event, index)
-                    }
+                    playerVars: { 'autoplay': 1, 'controls': 0, 'showinfo': 0, 'modestbranding': 1, 'mute': 1, 'loop': 1, 'playlist': id, 'playsinline': 1, 'rel': 0, 'disablekb': 1, 'iv_load_policy': 3, 'origin': window.location.origin },
+                    events: { 'onReady': onPlayerReady, 'onStateChange': (event) => onPlayerStateChange(event, index) }
                 });
             });
         }
 
-        function onPlayerReady(event) {
-            event.target.mute(); 
-            event.target.playVideo();
-        }
+        function onPlayerReady(event) { event.target.mute(); event.target.playVideo(); }
 
         function onPlayerStateChange(event, index) {
-            if (event.data === YT.PlayerState.PLAYING) {
-                setTimeout(() => { playerStates[index] = true; }, 1000);
-            } else {
-                playerStates[index] = false;
-            }
+            if (event.data === YT.PlayerState.PLAYING) { setTimeout(() => { playerStates[index] = true; }, 1000); } 
+            else { playerStates[index] = false; }
         }
 
         function getRandomSelection(count) {
@@ -175,22 +160,14 @@
             return available[Math.floor(Math.random() * available.length)];
         }
 
-        // ★改良：裏側に隠れている動画だけを入れ替える
         function swapRandomVideo() {
             const hiddenIndexes = [];
             const layers = document.querySelectorAll('.video-layer');
-            
-            // 現在 opacity が 0（見えていない）のレイヤーを探す
             layers.forEach((layer, index) => {
-                if (window.getComputedStyle(layer).opacity === "0" || !playerStates[index]) {
-                    hiddenIndexes.push(index);
-                }
+                if (window.getComputedStyle(layer).opacity === "0" || !playerStates[index]) hiddenIndexes.push(index);
             });
-
-            // もし全部表示中なら入れ替えない（チラつき防止）
             if (hiddenIndexes.length === 0) return;
 
-            // 隠れているものの中から1つ選ぶ
             const targetIndex = hiddenIndexes[Math.floor(Math.random() * hiddenIndexes.length)];
             const player = players[targetIndex];
             const newId = getRandomVideoFromPool();
@@ -198,9 +175,7 @@
             if (player && player.loadVideoById) {
                 log(`Swapping Background Player ${targetIndex+1} -> ${newId}`);
                 playerStates[targetIndex] = false;
-                
                 const randomStart = Math.floor(Math.random() * 30); 
-                
                 setTimeout(() => {
                     player.loadVideoById({ videoId: newId, startSeconds: randomStart });
                     player.mute(); 
@@ -216,34 +191,20 @@
             document.getElementById('blend-btn').innerText = "BLEND: " + newMode;
         }
 
-        // ★改良：クロスフェードロジック
         function autoMixLogic() {
             const layers = document.querySelectorAll('.video-layer');
             const availableIndexes = [];
-            
-            // 再生準備が完了している動画をリストアップ
             playerStates.forEach((state, i) => { if (state) availableIndexes.push(i); });
-            
             if (availableIndexes.length === 0) return;
 
-            // 準備OKの動画の中から、「MIX LEVEL」の数だけランダムに選出する
             const targetCount = Math.min(mixLevel, availableIndexes.length);
             const shuffled = availableIndexes.sort(() => 0.5 - Math.random());
             const selectedIndexes = shuffled.slice(0, targetCount);
 
             layers.forEach((layer, index) => {
                 if (selectedIndexes.includes(index)) {
-                    // 【選ばれた動画はフェードイン】
-                    if (mixLevel === 1) {
-                        // 1枚だけの時はくっきり100%見せる
-                        layer.style.opacity = 1;
-                    } else {
-                        // 複数枚重なる時は、白飛びを防ぐため少し透明度を持たせる（0.4〜0.8）
-                        layer.style.opacity = (Math.random() * 0.4) + 0.4; 
-                    }
+                    layer.style.opacity = mixLevel === 1 ? 1 : (Math.random() * 0.4) + 0.4; 
                 } else {
-                    // 【選ばれなかった動画はフェードアウト】
-                    // ここが0になることで、選ばれた動画への美しいクロスフェードが実現します
                     layer.style.opacity = 0;
                 }
             });
@@ -253,3 +214,18 @@
             players.forEach((player, index) => {
                 if (player && player.seekTo && playerStates[index] && Math.random() < 0.1) { 
                     const duration = player.getDuration();
+                    if (duration > 0) player.seekTo(Math.random() * (duration - 5), true);
+                }
+            });
+        }
+
+        setTimeout(() => {
+            setInterval(autoMixLogic, 8000);     
+            setInterval(randomJumpLogic, 15000); 
+            setInterval(swapRandomVideo, 30000); 
+            autoMixLogic();
+        }, 3000);
+
+    </script>
+</body>
+</html>
